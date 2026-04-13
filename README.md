@@ -11,23 +11,122 @@ Your goal is to:
 - Evaluate what your system gets right and wrong
 - Reflect on how this mirrors real world AI recommenders
 
-Replace this paragraph with your own summary of what your version does.
+This project builds a small content-based music recommender that scores a 20-song catalog against a user taste profile and returns the top matches. It prioritizes "vibe alignment" — matching the emotional and sonic feeling a listener wants in a session — over simple feature maximization. The system is intentionally transparent: every score is a weighted sum of explainable features, so you can see exactly why each song was recommended.
 
 ---
 
 ## How The System Works
 
-Explain your design in plain language.
+Real-world platforms like Spotify combine two approaches: **collaborative filtering**, which finds patterns across millions of users ("people who liked X also liked Y"), and **content-based filtering**, which compares a song's intrinsic audio attributes to a listener's known preferences. Production systems layer both methods and add deep learning on top, but both ultimately rely on the same insight: a user's next favorite song is probably close in "feature space" to what they already love.
 
-Some prompts to answer:
+This simulation uses **content-based filtering only**. Instead of rewarding songs that score highest on a single attribute (e.g., highest energy), the system scores each song by how *close* its features are to the user's stated preferences. A user who wants medium energy (0.40) gets penalized for songs that are too loud just as much as songs that are too quiet. Categorical features like genre and mood use a binary match, but are weighted more heavily than numeric features because they represent stronger, less negotiable listener preferences. The final recommendation is the top-k songs sorted by total score — combining a **scoring rule** (one song at a time) with a **ranking rule** (sort and slice the whole catalog).
 
-- What features does each `Song` use in your system
-  - For example: genre, mood, energy, tempo
-- What information does your `UserProfile` store
-- How does your `Recommender` compute a score for each song
-- How do you choose which songs to recommend
+### Song Features
 
-You can include a simple diagram or bullet list if helpful.
+| Feature | Type | Role in scoring |
+|---|---|---|
+| `genre` | categorical | Hard preference match — highest weight (3.0) |
+| `mood` | categorical | Emotional intent match — second highest weight (2.0) |
+| `energy` | float 0–1 | Proximity to `target_energy` — weight 2.0 |
+| `acousticness` | float 0–1 | Organic/electronic texture match — weight 1.5 |
+| `tempo_bpm` | float 60–160 | Normalized, then proximity scored — weight 1.0 |
+| `valence` | float 0–1 | Emotional positivity (reserved for future weighting) |
+| `danceability` | float 0–1 | Rhythmic intensity (least discriminating in this catalog) |
+| `title`, `artist` | string | Display only — not used in scoring |
+
+### UserProfile Fields
+
+| Field | Type | What it captures |
+|---|---|---|
+| `favorite_genre` | string | The listener's primary genre (e.g. `"lofi"`, `"rock"`) |
+| `favorite_mood` | string | The session mood they are seeking (e.g. `"chill"`, `"intense"`) |
+| `target_energy` | float 0–1 | How energetic they want the music to feel |
+| `likes_acoustic` | bool | Whether they prefer organic/acoustic sound over produced/electronic |
+
+### Step 2 — Sample User Profile
+
+The system is designed around a concrete "taste profile" that can be swapped for any listener:
+
+```python
+user_prefs = {
+    "favorite_genre":  "lofi",    # hard genre constraint
+    "favorite_mood":   "chill",   # session-level emotional intent
+    "target_energy":   0.40,      # mid-low intensity (study / background)
+    "likes_acoustic":  True,      # prefers organic sound over produced/electronic
+}
+```
+
+**Profile critique** (verified against the 20-song catalog):
+
+This profile cleanly separates the two extremes. *Midnight Coding* (lofi/chill, energy 0.42) scores **8.46** while *Storm Runner* (rock/intense, energy 0.91) scores **0.98** — a **7.48-point gap**, well beyond any scoring ambiguity.
+
+However, the profile has a deliberate narrowness: only 3 of 20 songs share the `lofi` genre, so the top-3 recommendations will almost always be the same lofi titles. Songs with a similarly chill sonic texture — *Spacewalk Thoughts* (ambient/chill, score 5.26) and *Ember & Ash* (soul/peaceful, score 3.46) — rank below any lofi song regardless of how well they match on energy and acousticness. This is a known trade-off, not a bug: genre represents the listener's deepest preference and deserves the highest weight.
+
+One notable edge case: *Focus Flow* (lofi/**focused**, score 6.50) ranks above *Spacewalk Thoughts* (ambient/**chill**, score 5.26) because it shares the genre even though its mood does not match. A user who strictly wants "chill" might prefer the reverse ordering — this is addressed in the Limitations section.
+
+### Step 3 — Finalized Algorithm Recipe
+
+**Scoring weights** (starting point from the module was `+2.0 genre, +1.0 mood`; the weights below were raised after analysis of the full 20-song catalog):
+
+| Component | Formula | Weight | Reasoning |
+|---|---|---|---|
+| Genre match | `1.0 if song.genre == user.genre else 0.0` | **3.0** | Genre is the hardest listener constraint — a jazz fan will skip metal regardless of other features |
+| Mood match | `1.0 if song.mood == user.mood else 0.0` | **2.0** | Mood is negotiable (chill and relaxed can co-exist) but still a strong session signal |
+| Energy proximity | `1.0 − abs(user.target_energy − song.energy)` | **2.0** | Rewards closeness, not magnitude — a user wanting 0.40 energy is penalized equally for 0.20 or 0.60 |
+| Acoustic match | `1.0 if (song.acousticness > 0.5) == user.likes_acoustic else 0.0` | **1.5** | Captures the organic/electronic texture divide; weighted below mood because it is binary and coarse |
+
+**Scoring at a Glance:**
+
+```
+total_score(user, song) =
+    3.0 × (genre match)
+  + 2.0 × (mood match)
+  + 2.0 × (1 − |user.target_energy − song.energy|)
+  + 1.5 × (acoustic texture match)
+
+Maximum possible score: 8.5
+```
+
+**Full ranking for the sample profile** (lofi / chill / 0.40 energy / likes acoustic):
+
+| Rank | Song | Genre | Mood | Score |
+|---|---|---|---|---|
+| 1 | Midnight Coding | lofi | chill | 8.46 |
+| 2 | Library Rain | lofi | chill | 8.40 |
+| 3 | Focus Flow | lofi | focused | 6.50 |
+| 4 | Spacewalk Thoughts | ambient | chill | 5.26 |
+| 5 | Ember & Ash | soul | peaceful | 3.46 |
+| … | *(songs 6–16 cluster 1.06–3.44)* | | | |
+| 17 | **Storm Runner** | **rock** | **intense** | **0.98** |
+| 20 | Iron Crown | metal | angry | 0.86 |
+
+### Step 4 — Data Flow
+
+```mermaid
+flowchart TD
+    A(["UserProfile
+        genre · mood · target_energy · likes_acoustic"])
+    B(["songs.csv
+        20 songs"])
+
+    A --> C["Score every song against profile"]
+    B --> C
+
+    C --> D["For each song compute:
+        3.0 × genre_match
+        + 2.0 × mood_match
+        + 2.0 × energy_proximity
+        + 1.5 × acoustic_match"]
+
+    D --> E["total_score ∈ [0.0, 8.5]"]
+    E --> F["Collect all 20 scored songs"]
+    F --> G["Sort by score descending"]
+    G --> H["Slice top-k"]
+    H --> I(["Recommendations
+        with scores and explanations"])
+```
+
+The loop **Input → Score → Collect → Sort → Slice** maps directly to the three functions in `src/recommender.py`: `score_song()` handles the inner box, `recommend_songs()` / `Recommender.recommend()` handles everything from Collect onward.
 
 ---
 
@@ -68,7 +167,17 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Experiments You Tried
 
-Use this section to document the experiments you ran. For example:
+### Experiment 1 — Default profile: pop / happy / energy 0.8
+
+Run: `python -m src.main`
+
+![CLI output showing top 5 recommendations with scores and reasons](screenshot.png)
+
+*Sunrise City scores 8.46/8.5 — a near-perfect match on genre, mood, energy, and texture. The score gap between #1 (8.46) and #4 (3.40) shows the weights are working: only songs that share the genre and mood can reach the top tier.*
+
+---
+
+Use this section to document further experiments you run. For example:
 
 - What happened when you changed the weight on genre from 2.0 to 0.5
 - What happened when you added tempo or valence to the score
@@ -78,15 +187,15 @@ Use this section to document the experiments you ran. For example:
 
 ## Limitations and Risks
 
-Summarize some limitations of your recommender.
+### Step 5 — Known Biases
 
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
+| Bias | What you'll observe | Root cause | Mitigation |
+|---|---|---|---|
+| **Genre lock** | The top-3 recommendations are almost always the same 3 lofi songs | Genre weight (3.0) dominates; only 3/20 songs are lofi | Reduce `w_genre` to 2.0 or add a "diversity bonus" that penalizes repeated genres in the top-k |
+| **Mood-genre conflict** | *Focus Flow* (lofi/focused, score 6.50) outranks *Spacewalk Thoughts* (ambient/chill, score 5.26) even though the user asked for "chill" | Genre match (3 pts) outweighs mood mismatch (−2 pts net vs match) | Swap `w_genre` and `w_mood` for users who declare their mood as the primary session intent |
+| **Binary acoustic coarseness** | *Golden Hour Drift* (r&b, acousticness=0.45) scores 0 on acoustic even though 0.45 is close to the 0.5 threshold | Acoustic is scored as a hard binary, not a proximity score | Replace the binary with a proximity formula: `1.0 − abs(user_target_acousticness − song.acousticness)` |
+| **Catalog sparsity per genre** | After a few sessions the system feels repetitive | 20 songs with 17 genres means most genres have only 1–2 songs | Expand the catalog or down-weight genre and up-weight energy/acousticness for "discovery" sessions |
+| **No sequential context** | Every session starts fresh; the system cannot learn "I just heard 3 lofi songs, show me something different" | The recommender is stateless — no session history | Add a "recently played" penalty in `recommend_songs()` |
 
 ---
 
