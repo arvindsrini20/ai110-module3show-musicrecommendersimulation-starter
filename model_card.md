@@ -6,11 +6,11 @@
 
 ---
 
-## 2. Intended Use
+## 2. Intended Use and Non-Intended Use
 
-VibeFinder suggests the top 5 songs from a 20-song catalog that best match a listener's stated taste for a single session. It is designed for classroom exploration — not for real-world deployment.
+**Intended use:** VibeFinder suggests the top 5 songs from a 20-song catalog that best match a listener's stated taste for a single session. It is designed for classroom exploration of how content-based recommender systems work.
 
-The system assumes the user can describe their preferences in four ways: a preferred genre (such as "lofi" or "rock"), a session mood (such as "chill" or "intense"), a desired energy level on a scale from 0.0 to 1.0, and whether they prefer acoustic or produced sound. It makes no attempt to learn from listening history or adapt over time.
+**Not intended for:** Real users, real products, or any deployment where recommendations affect what people actually listen to. The catalog is too small (20 songs), the features are too coarse (no listening history, no audio analysis), and the weights were tuned by hand for a simulation — not validated against real listener data. It should not be used to make decisions about music licensing, artist promotion, or content curation.
 
 ---
 
@@ -94,6 +94,10 @@ Six user profiles were tested:
 
 ## 9. Personal Reflection
 
-Building this recommender made the invisible logic behind Spotify and YouTube concrete. What feels like "the algorithm knows me" is, at its core, a weighted scoring function applied to every item in a catalog. The weights encode the designers' assumptions about what matters most to listeners — and those assumptions can be wrong or unfair in ways that are hard to detect from the outside.
+**Biggest learning moment:** The adversarial metal profile was the turning point. A user who explicitly asked for quiet acoustic music still got the one loud, electric metal song as their top recommendation — because genre and mood weight (5 out of 8.5 points) overrode the numeric mismatch entirely. That result looked wrong, but the math was correct. It made me realize that "working correctly" and "giving a good answer" are not the same thing. The weights are a design choice, not a fact.
 
-The most interesting discovery was how binary categorical features like genre dominate the results even when a user's numeric preferences (energy, acousticness) point in a completely different direction. A metal fan who explicitly asks for quiet acoustic music still gets the one loud, electric metal song because genre and mood carry 5 of the 8.5 possible points. In a real product, this kind of lock-in could reinforce narrow listening habits rather than helping users discover new music that fits how they actually feel.
+**How AI tools helped — and when I needed to double-check:** AI tools were useful for generating the 20-song catalog and explaining how content-based filtering works in plain language. But I had to verify every generated song value manually — several early drafts had energy or acousticness values outside the valid 0–1 range, and one song had a genre label that didn't match its mood description. AI-generated data needs the same review as any other data source; it can be plausible-sounding but still wrong in ways that quietly break the math.
+
+**What surprised me about simple algorithms:** The recommendations feel surprisingly natural even though the entire system is just four multiplications and a sort. When *Midnight Coding* scores 8.46/8.5 and comes back as the top result for a lofi/chill/acoustic listener, it genuinely seems like a good pick — not like a formula. That gap between "how it works" and "how it feels" is what makes recommender systems easy to anthropomorphize. The algorithm does not "know" anything; it just finds the closest match in feature space.
+
+**What I would try next:** I'd replace the binary acoustic threshold with a continuous proximity score, add a diversity bonus that penalizes repeated genres in the top 5, and expand the catalog to at least 100 songs so genre lock stops dominating every result. I'd also try adding valence (emotional positivity) as a scored feature — the catalog already has the data, and it would help distinguish "sad acoustic" from "peaceful acoustic" which currently score identically on three of four dimensions.
