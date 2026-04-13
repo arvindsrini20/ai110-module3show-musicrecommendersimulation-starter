@@ -167,21 +167,33 @@ You can add more tests in `tests/test_recommender.py`.
 
 ## Experiments You Tried
 
-### Experiment 1 — Default profile: pop / happy / energy 0.8
+### Experiment 1 — All 6 user profiles (3 normal + 3 adversarial)
 
-Run: `python -m src.main`
+Run: `python3 -m src.main`
 
-![CLI output showing top 5 recommendations with scores and reasons](screenshot.png)
+![CLI output — profile 1](screenshot1.png)
 
-*Sunrise City scores 8.46/8.5 — a near-perfect match on genre, mood, energy, and texture. The score gap between #1 (8.46) and #4 (3.40) shows the weights are working: only songs that share the genre and mood can reach the top tier.*
+![CLI output — profile 2](screenshot2.png)
+
+![CLI output — profile 3](screenshot3.png)
+
+![CLI output — profile 4](screenshot4.png)
+
+![CLI output — profile 5](screenshot5.png)
+
+![CLI output — profile 6](screenshot6.png)
+
+*Sunrise City scores 8.46/8.5 for the High-Energy Pop profile — a near-perfect match on genre, mood, energy, and texture. The adversarial profiles reveal the system's limits: the Metal Fan Who Wants Quiet Acoustic profile still gets Iron Crown at #1 (5.66/8.5) because genre+mood weight (5.0 pts) overrides the energy and acoustic mismatch.*
 
 ---
 
-Use this section to document further experiments you run. For example:
+### Experiment 2 — Weight shift: double energy, halve genre
 
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
+Run: `python3 -m src.main --experiment`
+
+![CLI output showing rank comparison table for default vs modified weights](screenshot_experiment.png)
+
+*With energy weight doubled (2.0 → 4.0) and genre halved (3.0 → 1.5), Rooftop Lights swaps with Gym Hero at ranks 2 and 3. Rooftop Lights has energy 0.76 (close to the 0.80 target) while Gym Hero has energy 0.93 (further away). Higher energy weight rewards closeness over same-genre loyalty.*
 
 ---
 

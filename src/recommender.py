@@ -63,13 +63,23 @@ def load_songs(csv_path: str) -> List[Dict]:
 # Step 2 — score_song
 # ---------------------------------------------------------------------------
 
-def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
+def score_song(user_prefs: Dict, song: Dict,
+               weights: Optional[Dict[str, float]] = None) -> Tuple[float, List[str]]:
     """Score one song against user preferences; return (score, reason_list).
 
     Supports both short keys ("genre", "mood", "energy") and long keys
     ("favorite_genre", "favorite_mood", "target_energy") so the function
     works with both the functional API and OOP adapters.
+
+    Optional `weights` dict overrides module-level constants for this call.
+    Keys: "W_GENRE", "W_MOOD", "W_ENERGY", "W_ACOUSTIC".
     """
+    w = weights or {}
+    w_genre    = w.get("W_GENRE",    W_GENRE)
+    w_mood     = w.get("W_MOOD",     W_MOOD)
+    w_energy   = w.get("W_ENERGY",   W_ENERGY)
+    w_acoustic = w.get("W_ACOUSTIC", W_ACOUSTIC)
+
     # Normalise key names — accept "genre" or "favorite_genre" etc.
     genre          = user_prefs.get("genre")          or user_prefs.get("favorite_genre", "")
     mood           = user_prefs.get("mood")           or user_prefs.get("favorite_mood",  "")
@@ -81,18 +91,18 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
 
     # Genre match ─────────────────────────────────────────────────────────
     if song["genre"] == genre:
-        score += W_GENRE
-        reasons.append(f"genre match: {genre} (+{W_GENRE:.1f})")
+        score += w_genre
+        reasons.append(f"genre match: {genre} (+{w_genre:.1f})")
 
     # Mood match ──────────────────────────────────────────────────────────
     if song["mood"] == mood:
-        score += W_MOOD
-        reasons.append(f"mood match: {mood} (+{W_MOOD:.1f})")
+        score += w_mood
+        reasons.append(f"mood match: {mood} (+{w_mood:.1f})")
 
     # Energy proximity ────────────────────────────────────────────────────
     # 1.0 when energy == target; approaches 0.0 as the gap grows toward 1.0
     energy_prox = 1.0 - abs(target_energy - song["energy"])
-    energy_pts  = round(W_ENERGY * energy_prox, 2)
+    energy_pts  = round(w_energy * energy_prox, 2)
     score       = round(score + energy_pts, 2)
     reasons.append(
         f"energy {song['energy']:.2f} vs target {float(target_energy):.2f} (+{energy_pts:.2f})"
@@ -102,9 +112,9 @@ def score_song(user_prefs: Dict, song: Dict) -> Tuple[float, List[str]]:
     if likes_acoustic is not None:
         song_is_acoustic = song["acousticness"] > 0.5
         if song_is_acoustic == bool(likes_acoustic):
-            score = round(score + W_ACOUSTIC, 2)
+            score = round(score + w_acoustic, 2)
             label = "acoustic" if likes_acoustic else "non-acoustic"
-            reasons.append(f"texture match: {label} (+{W_ACOUSTIC:.1f})")
+            reasons.append(f"texture match: {label} (+{w_acoustic:.1f})")
 
     return score, reasons
 
@@ -117,6 +127,7 @@ def recommend_songs(
     user_prefs: Dict,
     songs: List[Dict],
     k: int = 5,
+    weights: Optional[Dict[str, float]] = None,
 ) -> List[Tuple[Dict, float, str]]:
     """Score every song, then return the top-k results sorted highest first.
 
@@ -125,7 +136,7 @@ def recommend_songs(
     Returns a list of (song_dict, score, explanation_string) tuples.
     """
     scored = [
-        (song, *score_song(user_prefs, song))   # (song, score, reasons)
+        (song, *score_song(user_prefs, song, weights=weights))   # (song, score, reasons)
         for song in songs
     ]
 
