@@ -8,96 +8,94 @@
 
 ## 2. Intended Use and Non-Intended Use
 
-**Intended use:** VibeFinder suggests the top 5 songs from a 20-song catalog that best match a listener's stated taste for a single session. It is designed for classroom exploration of how content-based recommender systems work.
+**Intended use:** VibeFinder is meant for a classroom setting to show how a basic music recommender works. It looks at a user's preferred genre, mood, energy level, and whether they like acoustic music, then returns the top 5 matching songs from a 20-song catalog.
 
-**Not intended for:** Real users, real products, or any deployment where recommendations affect what people actually listen to. The catalog is too small (20 songs), the features are too coarse (no listening history, no audio analysis), and the weights were tuned by hand for a simulation — not validated against real listener data. It should not be used to make decisions about music licensing, artist promotion, or content curation.
+**Not intended for:** Real users or real products. The catalog only has 20 songs, the weights were set by hand, and the system never learns from actual listening data. It should not be used to make decisions about what music gets promoted or recommended to real people.
 
 ---
 
 ## 3. How the Model Works
 
-For every song in the catalog, the system computes a score by comparing four features to the user's preferences:
+For each song in the catalog, the system gives it a score based on how well it matches what the user wants. There are four things it checks:
 
-- **Genre**: If the song's genre matches what the user wants, it earns the most points (3 out of a possible 8.5). Genre is treated as a hard preference — a jazz fan should almost never get metal recommendations.
-- **Mood**: If the song's mood matches, it earns the second-highest points (2 out of 8.5). Mood is important but slightly more flexible than genre.
-- **Energy**: Instead of rewarding the highest-energy song, the system rewards the *closest* match. A user who wants medium energy gets penalized equally for songs that are too quiet or too loud. This earns up to 2 points.
-- **Acoustic texture**: If the song's acoustic character (organic vs. electronic sound) matches the user's preference, it earns 1.5 points.
+- **Genre**: If the song matches the user's genre, it gets 3 points. Genre matters the most because it is the biggest factor in what someone wants to hear.
+- **Mood**: A mood match earns 2 points. Mood is important but a little more flexible than genre.
+- **Energy**: Instead of just picking the most energetic song, the system picks the one closest to what the user asked for. A perfect energy match earns up to 2 points.
+- **Acoustic texture**: If the song's sound (organic vs. electronic) matches what the user likes, it earns 1.5 points.
 
-The song with the highest total score across all four components wins. The top 5 are returned as recommendations, each with a breakdown explaining exactly how the score was earned.
+The scores are added up and the top 5 songs are returned. Each result shows a breakdown of exactly how the score was calculated.
 
 ---
 
 ## 4. Data
 
-The catalog contains 20 songs stored in `data/songs.csv`. Each song has a title, artist, genre, mood, energy level (0.0–1.0), tempo in BPM, and three audio texture measures: acousticness, danceability, and valence.
+The catalog has 20 songs saved in `data/songs.csv`. Each song has a title, artist, genre, mood, energy (0.0 to 1.0), tempo in BPM, acousticness, danceability, and valence.
 
-The catalog was expanded from the original 10-song starter to 20 songs to cover a wider range of genres and moods. It now includes pop, lofi, rock, synthwave, indie pop, jazz, ambient, electronic, r&b, classical, hip-hop, country, blues, metal, latin, soul, and folk.
+The original starter file had 10 songs. I expanded it to 20 to include more variety. The catalog now covers genres like pop, lofi, rock, jazz, ambient, hip-hop, blues, metal, soul, and folk.
 
-Despite the expansion, the dataset still reflects a mostly Western and English-language taste. Every song is a fictional entry written for this simulation. Genres like reggae, K-pop, Afrobeats, and classical Indian music are not represented at all, which means users who prefer those styles will always receive fallback recommendations based on mood and energy alone.
+That said, the dataset is still pretty limited. All the songs are fictional and reflect mostly Western music styles. Genres like reggae, K-pop, and Afrobeats are not included at all, so users who prefer those styles will never get a genre match.
 
 ---
 
 ## 5. Strengths
 
-The system works best for users whose preferences align tightly with the catalog. In testing:
+The system works best when the user's preferences match something in the catalog closely. A few examples from testing:
 
-- The **Chill Lofi Study** profile (lofi / chill / 0.40 energy) produced a near-perfect top result: *Midnight Coding* scored 8.46 out of 8.5, matching on all four dimensions.
-- The **Deep Intense Rock** profile found *Storm Runner* at 8.48/8.5 — almost a perfect score.
-- The scoring breakdown makes every recommendation fully explainable. A user can see exactly why *Midnight Coding* outranked *Spacewalk Thoughts* — the genre match alone accounts for the gap.
-- The proximity formula for energy prevents extreme songs from dominating. A user who wants energy 0.4 will not be flooded with high-energy tracks just because there are more of them in the catalog.
+- The **Chill Lofi Study** profile got *Midnight Coding* as the top result with a score of 8.46 out of 8.5. It matched on all four features.
+- The **Deep Intense Rock** profile got *Storm Runner* at 8.48/8.5, which was the highest score across all tests.
+- Every recommendation comes with an explanation showing exactly which features matched and how many points each one added. This makes the system easy to understand and debug.
+- The energy scoring penalizes songs that are too loud OR too quiet, so it actually rewards closeness rather than just high energy.
 
 ---
 
 ## 6. Limitations and Bias
 
-**Genre lock**: Because genre carries the most weight (3 out of 8.5 points), users who prefer a well-represented genre like lofi or pop will always see the same 2–3 songs at the top, regardless of energy or mood variation. The system has no way to introduce diversity unless the genre weight is reduced.
+**Genre lock**: Genre has the highest weight (3 out of 8.5 points), so users who like a genre with only a few songs in the catalog will see the same results every time. A lofi listener will almost always get the same 3 songs at the top.
 
-**Missing genres**: Any genre not in the catalog — reggae, K-pop, Afrobeats — earns zero genre points for every song. The system silently falls back to mood and energy matching, and the maximum achievable score drops from 8.5 to 5.5. There is no warning to the user that their preferred genre does not exist.
+**Missing genres**: If a user's preferred genre is not in the catalog, they get zero genre points for every song. The max score drops from 8.5 to 5.5 and there is no message telling the user this happened.
 
-**Binary acoustic scoring**: Acousticness is treated as a yes/no decision at the 0.5 threshold. A song with acousticness 0.48 scores zero for acoustic even though it is nearly as organic as one at 0.52. This is an artifact of the coarse binary rule, not a genuine difference in character.
+**Binary acoustic scoring**: The system decides if a song is acoustic based on whether its acousticness score is above or below 0.5. A song at 0.48 and a song at 0.52 are treated completely differently even though they sound almost the same.
 
-**Catalog sparsity**: With only 1–2 songs per genre in most cases, the system feels repetitive quickly. A lofi listener will receive the same three songs every session.
+**Small catalog**: With only 1 or 2 songs per genre, the recommendations get repetitive fast.
 
-**No session memory**: The recommender starts from scratch every time. It has no way to know a listener just heard three lofi songs and might want variety now.
+**No memory**: The system starts fresh every time. It does not know what a user already heard, so it might suggest the same songs over and over.
 
 ---
 
 ## 7. Evaluation
 
-Six user profiles were tested:
+I tested six user profiles:
 
-1. **High-Energy Pop** (pop / happy / 0.8): *Sunrise City* scored 8.46/8.5 — a near-perfect match. The score gap to #4 (3.40) confirmed that genre+mood alignment is the dominant signal.
+1. **High-Energy Pop** (pop / happy / 0.8 energy): *Sunrise City* scored 8.46/8.5. Songs ranked 4th and 5th had scores around 3.4, which shows how much genre and mood matter.
 
-2. **Chill Lofi Study** (lofi / chill / 0.4): Top 3 results were all lofi songs. *Focus Flow* (lofi / focused) ranked above *Spacewalk Thoughts* (ambient / chill) due to genre weight — even though the ambient song matched the mood better.
+2. **Chill Lofi Study** (lofi / chill / 0.4 energy): The top 3 were all lofi songs. *Focus Flow* ranked above *Spacewalk Thoughts* just because it matched the genre, even though *Spacewalk Thoughts* matched the mood better.
 
-3. **Deep Intense Rock** (rock / intense / 0.9): *Storm Runner* scored 8.48/8.5. The second-ranked song (*Gym Hero*) was pop/intense — showing that mood match alone can push a song into the top 2.
+3. **Deep Intense Rock** (rock / intense / 0.9 energy): *Storm Runner* was a near-perfect match. The second place song was pop/intense, which shows mood alone can push a song into the top 2.
 
-4. **Adversarial — High-Energy Sad Blues**: The only blues/sad song has energy 0.30, far from the requested 0.90. It still ranked #1 (7.30/8.5) because genre+mood points (5.0) outweighed the energy mismatch penalty (~1.20 lost points). The system chose genre/mood loyalty over energy accuracy.
+4. **Adversarial - High-Energy Sad Blues**: The only blues/sad song has an energy of 0.30, but the user wanted 0.90. It still came in first (7.30/8.5) because genre and mood points added up to 5.0 and outweighed the energy penalty.
 
-5. **Adversarial — Reggae (missing genre)**: All songs scored zero for genre. The best achievable score was 5.26 (*Ember & Ash*, soul/peaceful). The system gracefully degraded to mood+energy matching.
+5. **Adversarial - Reggae (not in catalog)**: Every song got zero genre points. The best result was 5.26/8.5. The system just quietly fell back to mood and energy matching.
 
-6. **Adversarial — Metal Fan Who Wants Quiet Acoustic**: *Iron Crown* ranked #1 at 5.66/8.5 despite having energy 0.97 (vs. target 0.30) and acousticness 0.04. Genre+mood weight (5.0 pts) dominated even with a 1.34-point energy penalty and 0 acoustic points. This was the most surprising result — a song that is almost the opposite of what the user described numerically still "won" on categorical matching.
+6. **Adversarial - Metal Fan Who Wants Quiet Acoustic**: *Iron Crown* has energy 0.97 and acousticness 0.04, almost the opposite of what this user wanted. It still ranked first at 5.66/8.5 because genre and mood together were worth 5.0 points.
 
-**Weight-shift experiment**: Doubling the energy weight (to 4.0) and halving the genre weight (to 1.5) caused *Rooftop Lights* (indie pop/happy) to swap positions with *Gym Hero* (pop/intense). Rooftop Lights has energy 0.76 — much closer to the target 0.80 — while Gym Hero has energy 0.93. With higher energy weight, closeness mattered more than sharing the same genre.
+**Weight shift experiment**: I doubled the energy weight and cut the genre weight in half. This caused *Rooftop Lights* and *Gym Hero* to swap at ranks 2 and 3. Rooftop Lights has energy 0.76 (very close to the 0.80 target), while Gym Hero has energy 0.93 (further away). With more emphasis on energy, closeness to the target mattered more than sharing the same genre.
 
 ---
 
 ## 8. Future Work
 
-- **Proximity-based acoustic scoring**: Replace the hard 0.5 threshold with a continuous proximity formula (`1.0 − |user_target − song.acousticness|`), so songs near the boundary are not unfairly penalized.
-- **Diversity bonus**: Add a penalty for songs whose genre appears more than once already in the top-k, to surface more variety.
-- **Recently played penalty**: Subtract points from songs heard in the last N sessions so the same three lofi songs don't appear every time.
-- **Tempo and valence scoring**: The catalog already has `tempo_bpm` and `valence` fields. Adding them to the score formula would improve discrimination between songs that currently tie on genre, mood, and energy.
-- **Expand the catalog**: 20 songs is too few for meaningful diversity. Adding 100+ songs across underrepresented genres (reggae, Afrobeats, K-pop) would reduce the "genre lock" problem significantly.
+- **Smoother acoustic scoring**: Replace the 0.5 cutoff with a formula that gives partial credit based on how close a song's acousticness is to what the user wants.
+- **Diversity bonus**: Add a small penalty if the same genre shows up more than once in the top 5, so the results feel less repetitive.
+- **More songs**: 20 songs is not enough. Adding 100 or more songs across a wider range of genres would make the recommendations feel more varied and useful.
 
 ---
 
 ## 9. Personal Reflection
 
-**Biggest learning moment:** The adversarial metal profile was the turning point. A user who explicitly asked for quiet acoustic music still got the one loud, electric metal song as their top recommendation — because genre and mood weight (5 out of 8.5 points) overrode the numeric mismatch entirely. That result looked wrong, but the math was correct. It made me realize that "working correctly" and "giving a good answer" are not the same thing. The weights are a design choice, not a fact.
+**Biggest learning moment:** The metal profile surprised me the most. The user asked for quiet acoustic music, but the system still returned the loud electric metal song as the top pick. The math was not wrong, but the answer felt wrong. That made me realize that a system can follow its rules perfectly and still give a bad result. The weights are just design decisions, not facts.
 
-**How AI tools helped — and when I needed to double-check:** AI tools were useful for generating the 20-song catalog and explaining how content-based filtering works in plain language. But I had to verify every generated song value manually — several early drafts had energy or acousticness values outside the valid 0–1 range, and one song had a genre label that didn't match its mood description. AI-generated data needs the same review as any other data source; it can be plausible-sounding but still wrong in ways that quietly break the math.
+**How AI tools helped and when I needed to double-check:** AI tools helped me generate the extra songs for the catalog and helped me understand how content-based filtering works. But I had to manually check every generated song because some had energy or acousticness values outside the 0 to 1 range, and a few had genre labels that did not match their moods. AI output needs review just like any other data.
 
-**What surprised me about simple algorithms:** The recommendations feel surprisingly natural even though the entire system is just four multiplications and a sort. When *Midnight Coding* scores 8.46/8.5 and comes back as the top result for a lofi/chill/acoustic listener, it genuinely seems like a good pick — not like a formula. That gap between "how it works" and "how it feels" is what makes recommender systems easy to anthropomorphize. The algorithm does not "know" anything; it just finds the closest match in feature space.
+**What surprised me about simple algorithms:** The results actually feel like real recommendations even though the whole system is just four math operations and a sort. When *Midnight Coding* comes up as the top pick for a lofi/chill listener with a score of 8.46, it genuinely feels like a good suggestion. The gap between how simple the code is and how natural the output feels was something I did not expect going in.
 
-**What I would try next:** I'd replace the binary acoustic threshold with a continuous proximity score, add a diversity bonus that penalizes repeated genres in the top 5, and expand the catalog to at least 100 songs so genre lock stops dominating every result. I'd also try adding valence (emotional positivity) as a scored feature — the catalog already has the data, and it would help distinguish "sad acoustic" from "peaceful acoustic" which currently score identically on three of four dimensions.
+**What I would try next:** I would add continuous acoustic scoring instead of the binary cutoff, add a genre diversity bonus to avoid repetitive results, and expand the catalog to at least 100 songs. I would also try scoring valence (the emotional positivity of a song) since the data is already there and it would help separate "sad acoustic" from "calm acoustic" which currently score the same way.
